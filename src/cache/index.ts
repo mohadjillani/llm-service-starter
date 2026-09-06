@@ -132,6 +132,12 @@ const SEMANTIC_INDEX = 'cache:semantic:index';
  *
  * It is off by default. A near-match is still a different question, and serving
  * a stored answer to it is a product decision, not a performance one.
+ *
+ * SEMANTIC_THRESHOLD is not portable between embedders. Cosine similarity has
+ * no universal scale: the trigram stand-in in this file scores a near-identical
+ * pair around 0.7, where a real embedding model would put the same pair well
+ * above 0.9. Changing the embedder means re-measuring the threshold — the
+ * shipped default suits a real model, not the stand-in.
  */
 export function createSemanticCache(redis: Redis, options: SemanticCacheOptions): Cache {
   const window = options.window ?? 200;

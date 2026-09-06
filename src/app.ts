@@ -10,7 +10,7 @@ import type { Ledger, LedgerEntry } from './accounting/ledger.ts';
 import type { BudgetBreaker } from './accounting/budget.ts';
 import type { RateLimiter } from './middleware/rate-limit.ts';
 import type { Moderator } from './middleware/moderation.ts';
-import { costOf } from './accounting/pricing.ts';
+import { costFromPrice } from './accounting/pricing.ts';
 import { keyFingerprint, type Logger } from './telemetry/logger.ts';
 import type { PromptRegistry } from './prompts/registry.ts';
 
@@ -46,9 +46,23 @@ function apiKeyOf(req: Request): string {
   return header.replace(/^Bearer\s+/i, '').trim() || 'anonymous';
 }
 
-/** Backpressure-aware write: waits for drain rather than buffering unboundedly. */
+/**
+ * Backpressure-aware write.
+ *
+ * Waiting for `drain` is what keeps a slow reader from making the process
+ * buffer the whole answer in memory. But a client that disconnects mid-stream
+ * never drains, so waiting on that event alone hangs the handler forever — and
+ * with it the ledger write that comes after the loop, which is precisely the
+ * accounting the disconnect path exists to guarantee. `close` and `error` end
+ * the wait too.
+ */
 async function write(res: Response, chunk: string): Promise<void> {
-  if (!res.write(chunk)) await once(res, 'drain');
+  if (res.writableEnded || res.destroyed) return;
+  if (res.write(chunk)) return;
+
+  await Promise.race([once(res, 'drain'), once(res, 'close'), once(res, 'error')]).catch(
+    () => undefined,
+  );
 }
 
 /** Safe for an `unknown` from a catch block, which may not be an Error. */
@@ -165,9 +179,26 @@ export function createApp(deps: AppDependencies): Express {
     return { kind: 'call', prompt, model };
   }
 
+  /**
+   * Records the entry and charges the budget.
+   *
+   * Deliberately swallows its own failures. By the time this runs the tokens
+   * have already been spent; turning a completed answer into a 500 does not
+   * unspend them, and the client will retry and spend more. An unrecordable
+   * charge is logged at error level so it is visible, and is the accepted cost
+   * of BUDGET_FAIL_MODE=open — under the default the request would have been
+   * refused before reaching the provider at all.
+   */
   async function settle(entry: LedgerEntry): Promise<void> {
-    await ledger.record(entry);
-    if (entry.costUsd !== null && !entry.cached) await budget.add(entry.costUsd);
+    try {
+      await ledger.record(entry);
+      if (entry.costUsd !== null && !entry.cached) await budget.add(entry.costUsd);
+    } catch (error) {
+      logger.error(
+        { requestId: entry.requestId, costUsd: entry.costUsd, err: describeError(error) },
+        'failed to record spend — the tokens were used but are not accounted for',
+      );
+    }
     logger.info(
       {
         requestId: entry.requestId,
@@ -217,7 +248,12 @@ export function createApp(deps: AppDependencies): Express {
     }
 
     const controller = new AbortController();
-    req.on('close', () => {
+    // `res`, not `req`. For a request whose body has already been parsed, req
+    // emits 'close' as soon as the body is consumed — often before this
+    // handler is attached — so listening there either aborts immediately or
+    // never fires. The response closing while it is still writable is what
+    // actually means the client went away.
+    res.on('close', () => {
       if (!res.writableEnded) controller.abort();
     });
 
@@ -248,7 +284,7 @@ export function createApp(deps: AppDependencies): Express {
         model: result.model,
         promptTokens: result.usage.promptTokens,
         completionTokens: result.usage.completionTokens,
-        costUsd: costOf(result.model, result.usage),
+        costUsd: costFromPrice(provider.pricing(result.model), result.usage),
         estimated: false,
         cached: false,
         streamed: false,
@@ -329,7 +365,8 @@ export function createApp(deps: AppDependencies): Express {
 
     const controller = new AbortController();
     let aborted = false;
-    req.on('close', () => {
+    // See the note on the non-streaming route: this has to be `res`, not `req`.
+    res.on('close', () => {
       if (!res.writableEnded) {
         aborted = true;
         // Cancels the upstream call. Without this the provider keeps
@@ -390,7 +427,7 @@ export function createApp(deps: AppDependencies): Express {
       model: prepared.model,
       promptTokens: finalUsage.promptTokens,
       completionTokens: finalUsage.completionTokens,
-      costUsd: costOf(prepared.model, finalUsage),
+      costUsd: costFromPrice(provider.pricing(prepared.model), finalUsage),
       estimated,
       cached: false,
       streamed: true,

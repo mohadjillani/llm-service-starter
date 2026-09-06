@@ -32,13 +32,23 @@ export function knownModels(): string[] {
   return Object.keys(pricing.models);
 }
 
-/** Cost in US dollars, or null when the model is not in the table. */
-export function costOf(model: string, usage: Usage): number | null {
-  const price = priceFor(model);
+/** Cost in US dollars from a price the provider supplied. */
+export function costFromPrice(price: Price | null, usage: Usage): number | null {
   if (!price) return null;
   const input = (usage.promptTokens / 1_000_000) * price.inputPerMillion;
   const output = (usage.completionTokens / 1_000_000) * price.outputPerMillion;
   // Sub-cent amounts are the normal case, so round to a precision that keeps
   // them rather than to two decimal places.
   return Number((input + output).toFixed(8));
+}
+
+/**
+ * Cost for a model in the shipped table.
+ *
+ * Callers that have a provider should ask the provider instead — the mock
+ * prices itself at zero, and pricing it off this table would make a demo run
+ * look like it spent money.
+ */
+export function costOf(model: string, usage: Usage): number | null {
+  return costFromPrice(priceFor(model), usage);
 }
