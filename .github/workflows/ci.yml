@@ -34,7 +34,8 @@ jobs:
       - run: npm run env:check
       # The committed evaluation report must match what the templates produce.
       - run: npm run eval:check
-      # The Redis suites skip here; the integration job runs them.
+      # The Redis suites skip here, so coverage cannot reach its thresholds —
+      # they are enforced in the integration job, where every path is reachable.
       - run: npm test
       - run: npm run build
 
@@ -60,7 +61,7 @@ jobs:
           cache: npm
       - run: npm ci
       # Coverage thresholds are enforced here, where every path is reachable.
-      - run: npm test
+      - run: npm run test:coverage
       - run: npm run demo
 
   audit:

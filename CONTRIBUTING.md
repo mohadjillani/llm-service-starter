@@ -16,8 +16,9 @@ service owns. Suites that need Redis skip visibly without it:
 REDIS_URL=redis://127.0.0.1:6379/6 npm test
 ```
 
-Coverage thresholds are enforced, and are only reachable with Redis running.
-CI runs the full suite in a job with a Redis service container.
+`npm test` reports no coverage; `npm run test:coverage` enforces the thresholds
+and needs Redis, because several paths are unreachable without it. CI runs it in
+a job with a Redis service container.
 
 ## Seeing it work
 
