@@ -1,0 +1,58 @@
+{
+  "name": "llm-service-starter",
+  "version": "0.1.0",
+  "private": true,
+  "description": "An Express service that puts an LLM provider behind streaming, retries, a cost ledger, a monthly budget breaker and versioned prompts — with a mock provider so all of it is testable without a key.",
+  "author": "Mohad Jillani <mohad.jillani@gmail.com>",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/mohadjillani/llm-service-starter.git"
+  },
+  "homepage": "https://github.com/mohadjillani/llm-service-starter#readme",
+  "bugs": "https://github.com/mohadjillani/llm-service-starter/issues",
+  "type": "module",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "start": "node dist/server.js",
+    "dev": "tsx watch --env-file=.env src/server.ts",
+    "test": "vitest run --coverage",
+    "test:watch": "vitest",
+    "lint": "eslint .",
+    "typecheck": "tsc --noEmit",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "demo": "tsx scripts/demo.ts",
+    "eval": "tsx scripts/eval.ts",
+    "eval:check": "tsx scripts/eval.ts --check",
+    "env:check": "tsx scripts/check-env-example.ts"
+  },
+  "dependencies": {
+    "express": "^5.2.1",
+    "ioredis": "^5.9.0",
+    "js-tiktoken": "^1.0.21",
+    "openai": "^7.2.0",
+    "pino": "^10.3.1",
+    "pino-http": "^11.0.0",
+    "yaml": "^2.9.0",
+    "zod": "^4.5.4"
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.39.5",
+    "@types/express": "^5.0.6",
+    "@types/node": "^22.20.1",
+    "@types/supertest": "^6.0.3",
+    "@vitest/coverage-v8": "^3.2.7",
+    "eslint": "^9.39.5",
+    "pino-pretty": "^13.1.3",
+    "prettier": "^3.9.6",
+    "supertest": "^7.2.2",
+    "tsx": "^4.23.13",
+    "typescript": "^5.9.3",
+    "typescript-eslint": "^8.68.0",
+    "vitest": "^3.2.7"
+  }
+}
