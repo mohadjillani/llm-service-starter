@@ -1,0 +1,13 @@
+{
+  "asOf": "2026-08",
+  "currency": "USD",
+  "unit": "per million tokens",
+  "note": "A snapshot taken by hand, not a live feed. List prices change; check the source before trusting a cost figure, and add a new file rather than editing this one so old ledger entries stay explicable.",
+  "source": "https://openai.com/api/pricing/",
+  "models": {
+    "gpt-4o-mini": { "inputPerMillion": 0.15, "outputPerMillion": 0.6 },
+    "gpt-4o": { "inputPerMillion": 2.5, "outputPerMillion": 10.0 },
+    "gpt-4.1-mini": { "inputPerMillion": 0.4, "outputPerMillion": 1.6 },
+    "gpt-4.1": { "inputPerMillion": 2.0, "outputPerMillion": 8.0 }
+  }
+}
