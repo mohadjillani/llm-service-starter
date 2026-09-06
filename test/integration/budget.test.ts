@@ -2,7 +2,7 @@ import { afterAll, beforeEach, expect, it } from 'vitest';
 import request from 'supertest';
 import { Redis } from 'ioredis';
 import { createBudgetBreaker, monthKey, toUnits } from '../../src/accounting/budget.ts';
-import { buildApp, connectRedis, describeWithRedis } from '../helpers/app.ts';
+import { buildApp, connectRedis, describeWithRedis, redisUrl } from '../helpers/app.ts';
 
 describeWithRedis('monthly budget breaker', () => {
   const redis = connectRedis(6);
@@ -12,6 +12,7 @@ describeWithRedis('monthly budget breaker', () => {
   });
 
   afterAll(async () => {
+    if (!redisUrl) return;
     await redis.flushdb();
     await redis.quit();
   });

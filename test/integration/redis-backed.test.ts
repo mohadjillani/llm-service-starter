@@ -6,13 +6,14 @@ import {
   createExactCache,
   createSemanticCache,
 } from '../../src/cache/index.ts';
-import { connectRedis, describeWithRedis } from '../helpers/app.ts';
+import { connectRedis, describeWithRedis, redisUrl } from '../helpers/app.ts';
 
 const redis = connectRedis(6);
 
 // One client for the whole file, closed once at the end. Closing it inside the
 // first describe would leave the later ones talking to a dead connection.
 afterAll(async () => {
+  if (!redisUrl) return;
   await redis.flushdb();
   await redis.quit();
 });

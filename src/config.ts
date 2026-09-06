@@ -8,6 +8,17 @@ import { z } from 'zod';
  * instead of a red pipeline. This is the pattern from env-guard, reimplemented
  * here rather than depended on so the starter stands alone.
  */
+/**
+ * Treats an empty environment variable as unset.
+ *
+ * `OPENAI_API_KEY=` is how orchestrators and the `${VAR:-}` idiom in a compose
+ * file express "not provided", and an empty string is not a key. Without this,
+ * a stack that leaves the variable blank fails validation with "expected string
+ * to have >=1 characters" rather than falling back to the mock provider.
+ */
+const blankIsUnset = <T extends z.ZodType>(schema: T) =>
+  z.preprocess((value) => (value === '' ? undefined : value), schema);
+
 const schema = z.object({
   NODE_ENV: z.enum(['development', 'test', 'production']).default('development'),
   PORT: z.coerce.number().int().positive().default(3000),
@@ -15,8 +26,8 @@ const schema = z.object({
   LOG_PRETTY: z.stringbool().default(false),
 
   PROVIDER: z.enum(['mock', 'openai', 'compatible']).default('mock'),
-  OPENAI_API_KEY: z.string().min(1).optional(),
-  OPENAI_BASE_URL: z.url().optional(),
+  OPENAI_API_KEY: blankIsUnset(z.string().min(1).optional()),
+  OPENAI_BASE_URL: blankIsUnset(z.url().optional()),
   MODEL: z.string().min(1).default('gpt-4o-mini'),
   /** Per-attempt ceiling, not a total: retries each get the full budget. */
   REQUEST_TIMEOUT_MS: z.coerce.number().int().positive().default(30_000),

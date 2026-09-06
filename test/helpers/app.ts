@@ -104,11 +104,19 @@ export async function listen(app: ReturnType<typeof createApp>): Promise<Listeni
   };
 }
 
+/**
+ * A client for the suites that need one.
+ *
+ * This runs at collection time, inside a `describe` that may be skipped —
+ * vitest still executes the callback to register the skipped tests. Throwing
+ * here would fail the file instead of skipping it, which is the opposite of
+ * what the guard is for. Without REDIS_URL it returns a lazy client that never
+ * connects, and the tests that would use it do not run.
+ */
 export function connectRedis(db = 6): Redis {
-  if (!redisUrl) throw new Error('REDIS_URL is not set');
-  const url = new URL(redisUrl);
+  const url = new URL(redisUrl ?? 'redis://127.0.0.1:6379');
   url.pathname = `/${String(db)}`;
   // Offline queue left on so the first command waits for the connection
   // rather than being rejected before it is established.
-  return new Redis(url.toString(), { maxRetriesPerRequest: 2 });
+  return new Redis(url.toString(), { maxRetriesPerRequest: 2, lazyConnect: !redisUrl });
 }
