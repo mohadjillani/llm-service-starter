@@ -1,0 +1,30 @@
+# Golden cases for `npm run eval`.
+#
+# Each case is a set of template variables. The runner renders every version of
+# the template against every case and reports what each version costs to send.
+cases:
+  - name: short-news-item
+    variables:
+      max_words: 30
+      text: >-
+        The transport authority said the line would reopen on Monday after
+        signalling work that began in March. Services will run at a reduced
+        frequency for the first week.
+
+  - name: long-technical-passage
+    variables:
+      max_words: 80
+      text: >-
+        The migration moved 4.2 million rows between two schemas over eleven
+        hours. Throughput was limited by the replica apply lag rather than by
+        the primary, which stayed under 40 percent CPU throughout. The team
+        raised the batch pause twice, from 20ms to 50ms and then to 120ms,
+        after the lag crossed the alert threshold. No requests failed during
+        the window, and the read switch was flipped the following morning once
+        the verification query returned zero mismatches for three consecutive
+        runs.
+
+  - name: minimal-input
+    variables:
+      max_words: 10
+      text: The office moves to the third floor on Friday.

@@ -35,7 +35,7 @@ describe('openai-compatible provider', () => {
     const provider = createCompatibleProvider({
       baseURL: 'http://localhost:1234/v1/',
       fetchImpl: (input) => {
-        seenUrl = String(input);
+        seenUrl = input instanceof URL ? input.href : (input as string);
         return Promise.resolve(
           jsonResponse({ model: 'local', choices: [{ message: { content: 'hi' } }] }),
         );
