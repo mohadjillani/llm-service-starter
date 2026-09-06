@@ -1,4 +1,4 @@
-import table from '../../pricing/2026-08.json' with { type: 'json' };
+import { readFileSync } from 'node:fs';
 import type { Price, Usage } from '../providers/types.ts';
 
 interface PricingTable {
@@ -7,7 +7,14 @@ interface PricingTable {
   models: Record<string, { inputPerMillion: number; outputPerMillion: number }>;
 }
 
-const pricing = table as PricingTable;
+/**
+ * Read at startup rather than imported, so the path resolves the same way from
+ * `src/` under tsx and from `dist/` in the built image — both sit one level
+ * below the repository root.
+ */
+const pricing = JSON.parse(
+  readFileSync(new URL('../../pricing/2026-08.json', import.meta.url), 'utf8'),
+) as PricingTable;
 
 /**
  * Prices are a versioned file, not constants in code.
