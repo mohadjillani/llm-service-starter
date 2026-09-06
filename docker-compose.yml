@@ -1,0 +1,36 @@
+# The service and its Redis, on the mock provider so it runs with no API key.
+#
+#   docker compose up -d --wait api
+#   curl -X POST localhost:3000/v1/complete -H 'content-type: application/json' \
+#     -d '{"prompt":"hello"}'
+#
+# Point it at a real provider by setting PROVIDER and OPENAI_API_KEY in a .env
+# file next to this one.
+services:
+  redis:
+    image: redis:7-alpine
+    ports: ['6379:6379']
+    healthcheck:
+      test: ['CMD', 'redis-cli', 'ping']
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  api:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile
+    ports: ['3000:3000']
+    environment:
+      NODE_ENV: production
+      PORT: '3000'
+      PROVIDER: ${PROVIDER:-mock}
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      MODEL: ${MODEL:-gpt-4o-mini}
+      REDIS_URL: redis://redis:6379/0
+      MONTHLY_BUDGET_USD: ${MONTHLY_BUDGET_USD:-5}
+      BUDGET_FAIL_MODE: closed
+      CACHE_MODE: exact
+      LOG_LEVEL: info
+    depends_on:
+      redis: { condition: service_healthy }

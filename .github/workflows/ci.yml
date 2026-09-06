@@ -1,0 +1,155 @@
+name: ci
+
+on:
+  push:
+    branches: [main]
+    tags: ['v*']
+  pull_request:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    name: node ${{ matrix.node }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        node: [20, 22, 24]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node }}
+          cache: npm
+      - run: npm ci
+      - run: npm run lint
+      - run: npm run format:check
+      - run: npm run typecheck
+      - run: npm run env:check
+      # The committed evaluation report must match what the templates produce.
+      - run: npm run eval:check
+      # The Redis suites skip here; the integration job runs them.
+      - run: npm test
+      - run: npm run build
+
+  integration:
+    name: redis suites
+    runs-on: ubuntu-latest
+    services:
+      redis:
+        image: redis:7-alpine
+        ports: ['6379:6379']
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 10
+    env:
+      REDIS_URL: redis://127.0.0.1:6379/6
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      # Coverage thresholds are enforced here, where every path is reachable.
+      - run: npm test
+      - run: npm run demo
+
+  audit:
+    name: npm audit
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: npm audit --audit-level=high
+
+  compose:
+    name: compose stack
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: bring the stack up on the mock provider
+        run: docker compose up -d --wait api
+
+      - name: a completion round trip
+        run: |
+          curl -fsS http://127.0.0.1:3000/healthz | grep -q '"provider":"mock"'
+          curl -fsS http://127.0.0.1:3000/readyz
+
+          curl -fsS -X POST http://127.0.0.1:3000/v1/complete \
+            -H 'content-type: application/json' \
+            -d '{"prompt":"hello from ci"}' | grep -q '"text"'
+
+          # The same prompt again must come back marked as a cache hit.
+          curl -fsS -X POST http://127.0.0.1:3000/v1/complete \
+            -H 'content-type: application/json' \
+            -d '{"prompt":"hello from ci"}' | grep -q '"cached":true'
+
+      - name: a streamed round trip
+        run: |
+          body=$(curl -fsS -N -X POST http://127.0.0.1:3000/v1/complete/stream \
+            -H 'content-type: application/json' \
+            -d '{"prompt":"stream from ci"}')
+          echo "$body" | grep -q 'event: open'
+          echo "$body" | grep -q 'event: delta'
+          echo "$body" | grep -q 'event: done'
+
+      - name: the ledger recorded every request
+        run: |
+          curl -fsS http://127.0.0.1:3000/admin/ledger | tee /tmp/ledger.json
+          python3 -c "import json;d=json.load(open('/tmp/ledger.json'));assert d['summary']['entries'] >= 3, d['summary']"
+
+      - name: a bad request is rejected without reaching the provider
+        run: |
+          code=$(curl -s -o /dev/null -w '%{http_code}' -X POST http://127.0.0.1:3000/v1/complete \
+            -H 'content-type: application/json' -d '{}')
+          test "$code" = "400"
+
+      - name: stop with SIGTERM and expect a clean exit
+        run: |
+          docker compose stop -t 15 api
+          code=$(docker compose ps -a --format json api | python3 -c "import sys,json;print(json.loads(sys.stdin.read().splitlines()[0])['ExitCode'])")
+          test "$code" = "0"
+
+      - name: diagnostics
+        if: failure()
+        run: docker compose ps -a && docker compose logs --tail 200
+
+      - name: tear down
+        if: always()
+        run: docker compose down -v
+
+  image:
+    name: publish image
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: [verify, integration, audit, compose]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: docker/Dockerfile
+          push: true
+          tags: |
+            ghcr.io/${{ github.repository }}:${{ github.ref_name }}
+            ghcr.io/${{ github.repository }}:latest
